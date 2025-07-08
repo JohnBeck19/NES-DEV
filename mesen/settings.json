@@ -1,5 +1,5 @@
 ﻿{
-  "Version": "2.1.0",
+  "Version": "2.1.1",
   "ConfigUpgrade": 5,
   "Video": {
     "CustomAspectRatio": 1,
@@ -10018,6 +10018,14 @@
     "Items": [
       {
         "RomFile": {
+          "Path": "C:\\Neumont\\Retro\\projects\\src/controller.nes",
+          "InnerFile": "",
+          "InnerFileIndex": 0
+        },
+        "PatchFile": null
+      },
+      {
+        "RomFile": {
           "Path": "C:\\Neumont\\Retro\\projects\\src/sprites.nes",
           "InnerFile": "",
           "InnerFileIndex": 0
@@ -10100,8 +10108,8 @@
       "Height": 505
     },
     "WindowLocation": {
-      "X": 318,
-      "Y": 164
+      "X": 172,
+      "Y": 159
     },
     "WindowIsMaximized": false
   },
