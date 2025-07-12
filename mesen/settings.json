@@ -10018,6 +10018,14 @@
     "Items": [
       {
         "RomFile": {
+          "Path": "C:\\Neumont\\Retro\\projects\\src/game.nes",
+          "InnerFile": "",
+          "InnerFileIndex": 0
+        },
+        "PatchFile": null
+      },
+      {
+        "RomFile": {
           "Path": "C:\\Neumont\\Retro\\projects\\src/controller.nes",
           "InnerFile": "",
           "InnerFileIndex": 0
