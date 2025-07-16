@@ -59,10 +59,6 @@ player_x:               .res 1    ; Player X position
 player_y:               .res 1    ; Player Y position
 player_vel_x:           .res 1    ; Player X velocity
 player_vel_y:           .res 1    ; Player Y velocity
-ball_x:     .res 1    ; Ball X position
-ball_y:     .res 1    ; Ball Y position
-ball_dx:    .res 1    ; Ball X velocity
-ball_dy:    .res 1    ; Ball Y velocity
 score:                  .res 1    ; Score low byte
 scroll:                 .res 1    ; Scroll screen
 time:                   .res 1    ; Time (60hz = 60 FPS)
@@ -70,6 +66,14 @@ seconds:                .res 1    ; Seconds
 ; Reserve remaining space in this section if needed
                         .res 07   ; Pad to $30 (optional)
 
+enemy_x:         .res 1
+enemy_y:         .res 1
+enemy_timer:     .res 1
+bullet_x:        .res 1
+bullet_y:        .res 1
+bullet_dx:       .res 1
+bullet_dy:       .res 1
+bullet_active:   .res 1
 ;*****************************************************************
 ; OAM (Object Attribute Memory) ($0200–$02FF)
 ;*****************************************************************
@@ -217,16 +221,17 @@ textloop:
   LDA #120
   STA player_x
 
- ; Ball initial position and speed
-  LDA #128
-  STA ball_x
-  LDA #100
-  STA ball_y
 
-  LDA #1
-  STA ball_dx
-  LDA #1
-  STA ball_dy
+
+; Place enemy sprite at top center
+LDA #30
+STA enemy_y
+LDA #120
+STA enemy_x
+
+; Deactivate bullet initially
+LDA #0
+STA bullet_active
 
   RTS
 .endproc
@@ -261,32 +266,47 @@ textloop:
   STA SPRITE_3_ADDR + SPRITE_OFFSET_Y
 
   LDA #$00
-  STA PPU_SCROLL                         ; Write horizontal scroll
+  STA PPU_SCROLL
   DEC scroll
   LDA scroll
-  STA PPU_SCROLL                         ; Write vertical scroll
+  STA PPU_SCROLL
 
-  ; Set OAM address to 0 — required before DMA or manual OAM writes
+  ; Set OAM address to 0
   LDA #$00
-  STA PPU_SPRRAM_ADDRESS    ; $2003 — OAM address register
+  STA PPU_SPRRAM_ADDRESS
 
-  ; Start OAM DMA transfer (copies 256 bytes from oam → PPU OAM)
-  ; Write the high byte of the source address (e.g., $02 for $0200)
+  ; OAM DMA Transfer
   LDA #>oam
-  STA SPRITE_DMA            ; $4014 — triggers OAM DMA (513–514 cycles, CPU stalled)
+  STA SPRITE_DMA
 
-  ; === Ball Sprite (sprite 4) ===
-  LDA ball_y
-  STA oam + (4 * 4) + 0   ; Y position
+
+
+  ; === Enemy Sprite (sprite 5) ===
+  LDA enemy_y
+  STA oam + (5 * 4) + 0
   LDA #5
-  STA oam + (4 * 4) + 1   ; Tile index (replace with correct tile)
-  LDA #$00
-  STA oam + (4 * 4) + 2   ; Attributes
-  LDA ball_x
-  STA oam + (4 * 4) + 3   ; X position
+  STA oam + (5 * 4) + 1
+  LDA #0
+  STA oam + (5 * 4) + 2
+  LDA enemy_x
+  STA oam + (5 * 4) + 3
+
+  ; === Bullet Sprite (sprite 6) ===
+  LDA bullet_active
+  BEQ no_bullet_draw
+
+  LDA bullet_y
+  STA oam + (6 * 4) + 0
+  LDA #5
+  STA oam + (6 * 4) + 1
+  LDA #0
+  STA oam + (6 * 4) + 2
+  LDA bullet_x
+  STA oam + (6 * 4) + 3
+
+no_bullet_draw:
 
   RTS
-
 .endproc
 
 .proc update_player
@@ -327,40 +347,108 @@ not_left:
 .endproc
 
 
-.proc update_ball
-    ; Y movement
-    LDA ball_y
-    CLC
-    ADC ball_dy
-    STA ball_y
-    CMP #0
-    BNE @not_top
-        LDA #1
-        STA ball_dy
-@not_top:
-    LDA ball_y
-    CMP #210
-    BNE @not_bottom
-        LDA #$FF
-        STA ball_dy
-@not_bottom:
 
-    ; X movement
-    LDA ball_x
+
+
+
+.proc update_ai
+    ; Increment enemy timer
+    INC enemy_timer
+    LDA enemy_timer
+    CMP #2
+    BNE skip_ai
+    LDA #0
+    STA enemy_timer
+
+    ; === Move enemy toward player ===
+    ; Move X
+    LDA player_x
+    CMP enemy_x
+    BEQ skip_x
+    BCC move_enemy_left
+    INC enemy_x
+    JMP skip_x
+move_enemy_left:
+    DEC enemy_x
+skip_x:
+
+    ; Move Y
+    LDA player_y
+    CMP enemy_y
+    BEQ skip_y
+    BCC move_enemy_up
+    INC enemy_y
+    JMP skip_y
+move_enemy_up:
+    DEC enemy_y
+skip_y:
+
+    ; === Fire bullet if not active ===
+    LDA bullet_active
+    BNE skip_fire
+
+    LDA enemy_x
+    STA bullet_x
+    LDA enemy_y
+    STA bullet_y
+
+    ; Determine X direction
+    LDA player_x
+    CMP bullet_x
+    BCC shoot_left
+    LDA #1
+    JMP set_dx
+shoot_left:
+    LDA #$FF
+set_dx:
+    STA bullet_dx
+
+    ; Determine Y direction
+    LDA player_y
+    CMP bullet_y
+    BCC shoot_up
+    LDA #1
+    JMP set_dy
+shoot_up:
+    LDA #$FF
+set_dy:
+    STA bullet_dy
+
+    LDA #1
+    STA bullet_active
+
+skip_fire:
+skip_ai:
+    RTS
+.endproc
+
+
+
+
+.proc update_bullet
+    LDA bullet_active
+    BEQ skip_bullet
+
+    ; Move bullet X
+    LDA bullet_x
     CLC
-    ADC ball_dx
-    STA ball_x
-    CMP #0
-    BNE @not_left
-        LDA #1
-        STA ball_dx
-@not_left:
-    LDA ball_x
-    CMP #248
-    BNE @not_right
-        LDA #$FF
-        STA ball_dx
-@not_right:
+    ADC bullet_dx
+    STA bullet_x
+
+    ; Move bullet Y
+    LDA bullet_y
+    CLC
+    ADC bullet_dy
+    STA bullet_y
+
+    ; Optional: deactivate bullet off-screen
+    CMP #240
+    BCC :+
+    LDA #0
+    STA bullet_active
+:
+
+skip_bullet:
     RTS
 .endproc
 ;******************************************************************************
@@ -399,7 +487,8 @@ forever:
     ; Read controller
     JSR read_controller
     JSR update_player
-    JSR update_ball
+    JSR update_ai
+    JSR update_bullet
     ; Update sprite data (DMA transfer to PPU OAM)
     JSR update_sprites
 
